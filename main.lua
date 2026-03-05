@@ -18,9 +18,15 @@ local Players          = game:GetService("Players")
 local TweenService     = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local RunService       = game:GetService("RunService")
-local CoreGui          = game:GetService("CoreGui")
 
 local LocalPlayer = Players.LocalPlayer
+
+-- Safe GUI parent — some executors restrict CoreGui access
+local CoreGui
+do
+    local ok, result = pcall(function() return game:GetService("CoreGui") end)
+    CoreGui = (ok and result) or LocalPlayer:WaitForChild("PlayerGui")
+end
 
 -- ══════════════════════════════════════════════════════════════
 --  THEME
@@ -327,13 +333,14 @@ function PhoneUI:CreateWindow(opts)
     })
 
     -- accent dot
-    New("Frame", {
+    local accentDot = New("Frame", {
         Size = UDim2.new(0,8,0,8),
         Position = UDim2.new(0,14,0.5,-4),
         BackgroundColor3 = accent,
         ZIndex = 4,
         Parent = TBar,
-    }){ Corner(Theme.RadiusPill, ...) }
+    })
+    Corner(Theme.RadiusPill, accentDot)
 
     -- title label
     New("TextLabel", {
