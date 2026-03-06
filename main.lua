@@ -189,7 +189,6 @@ function Phone.new(opts)
   })
   local GL=N("UIGridLayout",{
     CellSize=UDim2.new(0,72,0,90),
-    CellPaddingSize=UDim2.new(0,16,0,10),
     HorizontalAlignment=Enum.HorizontalAlignment.Center,
     SortOrder=Enum.SortOrder.LayoutOrder,Parent=Grid,
   })
@@ -400,7 +399,7 @@ function Phone.new(opts)
 
   -- CC tiles
   local ccGrid=N("Frame",{Size=UDim2.new(1,-24,0,168),Position=UDim2.new(0,12,0,48),BackgroundTransparency=1,ZIndex=46,Parent=CC})
-  N("UIGridLayout",{CellSize=UDim2.new(0,74,0,74),CellPaddingSize=UDim2.new(0,12,0,12),HorizontalAlignment=Enum.HorizontalAlignment.Center,SortOrder=Enum.SortOrder.LayoutOrder,Parent=ccGrid})
+  N("UIGridLayout",{CellSize=UDim2.new(0,74,0,74),HorizontalAlignment=Enum.HorizontalAlignment.Center,SortOrder=Enum.SortOrder.LayoutOrder,Parent=ccGrid})
   local ccTiles={{icon="✈️",lbl="Airplane"},{icon="📶",lbl="Wi-Fi"},{icon="🔵",lbl="Bluetooth"},{icon="🔦",lbl="Torch"},{icon="🔕",lbl="Silent"},{icon="📺",lbl="Mirror"},{icon="⏱️",lbl="Timer"},{icon="🎵",lbl="Music"}}
   for _,t in ipairs(ccTiles) do
     local on=false
@@ -435,33 +434,32 @@ function Phone.new(opts)
   CCSlider(226,"🔊")
   CCSlider(270,"☀️")
 
-  -- ── DRAG — track mouse on StatusBar strip ─────────────
-  -- StatusBar is ZIndex 25, sits above everything except CC/AppView
-  -- When locked, LockScreen is ZIndex 15 so StatusBar still handles input fine
-  local _drag,_dragStart,_posStart=false,nil,nil
+  -- ── DRAG — invisible TextButton at top of Shell ─────────
+  -- Parented to Shell (not Screen), so it's outside ClipsDescendants
+  -- High ZIndex so it sits above side buttons visually but captures mouse
+  local DragHandle=N("TextButton",{
+    Size=UDim2.new(1,0,0,54),   -- full width, 54px tall (covers status bar)
+    Position=UDim2.new(0,0,0,13), -- y=13 = top of Screen inside Shell
+    BackgroundTransparency=1,
+    Text="",AutoButtonColor=false,
+    ZIndex=100,                  -- very high so nothing in Screen beats it
+    Parent=Shell,                -- child of Shell, NOT Screen — avoids ClipsDescendants
+  })
 
-  -- Use UIS directly with position check against status bar bounds
-  UIS.InputBegan:Connect(function(i)
-    if i.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
-    -- Check if click is within the status bar area of the shell
-    local mp = i.Position
-    local sa = StatusBar.AbsolutePosition
-    local ss = StatusBar.AbsoluteSize
-    if mp.X >= sa.X and mp.X <= sa.X+ss.X
-    and mp.Y >= sa.Y and mp.Y <= sa.Y+ss.Y then
+  local _drag,_dragStart,_posStart=false,nil,nil
+  DragHandle.InputBegan:Connect(function(i)
+    if i.UserInputType==Enum.UserInputType.MouseButton1 then
       _drag=true
-      _dragStart=Vector2.new(mp.X, mp.Y)
+      _dragStart=Vector2.new(i.Position.X,i.Position.Y)
       _posStart=Shell.Position
     end
   end)
   UIS.InputChanged:Connect(function(i)
     if not _drag then return end
     if i.UserInputType==Enum.UserInputType.MouseMovement then
-      local dx=i.Position.X-_dragStart.X
-      local dy=i.Position.Y-_dragStart.Y
       Shell.Position=UDim2.new(
-        _posStart.X.Scale, _posStart.X.Offset+dx,
-        _posStart.Y.Scale, _posStart.Y.Offset+dy)
+        _posStart.X.Scale, _posStart.X.Offset+(i.Position.X-_dragStart.X),
+        _posStart.Y.Scale, _posStart.Y.Offset+(i.Position.Y-_dragStart.Y))
     end
   end)
   UIS.InputEnded:Connect(function(i)
