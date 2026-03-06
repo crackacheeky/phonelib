@@ -105,6 +105,16 @@ function Phone.new(opts)
   self._ccOpen   = false
   self._apps     = {}
   self._dockApps = {}
+  -- User settings (read/written by built-in Settings app)
+  self._settings = {
+    username    = "Player",
+    displayName = "",
+    accentColor = Color3.fromRGB(10,132,255),
+    accentName  = "Blue",
+    wallpaper   = "Aurora",
+    textSize    = "Medium",
+  }
+
 
   -- ── ScreenGui ─────────────────────────────────────────
   local SG = N("ScreenGui",{
@@ -266,23 +276,6 @@ function Phone.new(opts)
     TextXAlignment=Enum.TextXAlignment.Center,
     ZIndex=71, Parent=LS,
   })
-  -- Swipe hint
-  local swipeHint=N("TextLabel",{
-    Size=UDim2.new(1,0,0,22), Position=UDim2.new(0,0,1,-90),
-    BackgroundTransparency=1, Text="⬆   Swipe up to unlock",
-    TextColor3=C.White, Font=C.Semi, TextSize=15,
-    TextXAlignment=Enum.TextXAlignment.Center,
-    TextTransparency=.35, ZIndex=71, Parent=LS,
-  })
-  -- Pulse hint
-  task.spawn(function()
-    while swipeHint and swipeHint.Parent do
-      sn(swipeHint,{TextTransparency=.65},1.2)
-      task.wait(1.3)
-      sn(swipeHint,{TextTransparency=.1},1.2)
-      task.wait(1.3)
-    end
-  end)
   -- Live lock clock
   task.spawn(function()
     while lsTime and lsTime.Parent do
@@ -292,26 +285,48 @@ function Phone.new(opts)
     end
   end)
 
-  -- Drag-up to unlock
-  local _lsDrag,_lsY=false,0
-  LS.InputBegan:Connect(function(i)
-    if i.UserInputType==Enum.UserInputType.MouseButton1
-    or i.UserInputType==Enum.UserInputType.Touch then
-      _lsDrag=true; _lsY=i.Position.Y
+  -- ── UNLOCK BUTTON (replaces unreliable swipe gesture) ──
+  local unlockBtn = N("TextButton",{
+    Size=UDim2.new(0,180,0,48),
+    Position=UDim2.new(.5,-90,1,-110),
+    BackgroundColor3=C.White,
+    BackgroundTransparency=0.15,
+    BorderSizePixel=0,
+    Text="🔓  Unlock",
+    TextColor3=C.White,
+    Font=C.Bold, TextSize=17,
+    AutoButtonColor=false,
+    ZIndex=72, Parent=LS,
+  })
+  Rnd(UDim.new(1,0), unlockBtn)
+  N("UIStroke",{Color=C.White,Thickness=1,Transparency=0.55,Parent=unlockBtn})
+
+  -- Pulse the button gently
+  task.spawn(function()
+    while unlockBtn and unlockBtn.Parent do
+      tw(unlockBtn,{BackgroundTransparency=0.35},1.1,Enum.EasingStyle.Sine)
+      task.wait(1.2)
+      tw(unlockBtn,{BackgroundTransparency=0.1},1.1,Enum.EasingStyle.Sine)
+      task.wait(1.2)
     end
   end)
-  UIS.InputChanged:Connect(function(i)
-    if _lsDrag then
-      local delta = _lsY - i.Position.Y
-      if delta > 70 then _lsDrag=false; self:_unlock() end
-    end
+
+  unlockBtn.MouseButton1Down:Connect(function()
+    sp(unlockBtn,{Size=UDim2.new(0,168,0,44),.2})
   end)
-  UIS.InputEnded:Connect(function(i)
-    if i.UserInputType==Enum.UserInputType.MouseButton1
-    or i.UserInputType==Enum.UserInputType.Touch then
-      _lsDrag=false
-    end
+  unlockBtn.MouseButton1Click:Connect(function()
+    sp(unlockBtn,{Size=UDim2.new(0,180,0,48),.3})
+    self:_unlock()
   end)
+
+  -- Also keep a subtle hint label
+  local swipeHint=N("TextLabel",{
+    Size=UDim2.new(1,0,0,18), Position=UDim2.new(0,0,1,-58),
+    BackgroundTransparency=1, Text="tap to unlock",
+    TextColor3=C.White, Font=C.Reg, TextSize=12,
+    TextXAlignment=Enum.TextXAlignment.Center,
+    TextTransparency=.5, ZIndex=71, Parent=LS,
+  })
 
   -- ── SpringBoard ───────────────────────────────────────
   local SBrd = N("Frame",{
@@ -1133,5 +1148,75 @@ function Phone:Dropdown(parent,opts)
   function obj:Set(v) val=v;selLbl.Text=tostring(v);cb(v) end
   return obj
 end
+
+-- ════════════════════════════════════════════════════════
+--  SETTINGS HELPERS  (called by the built-in settings app)
+-- ════════════════════════════════════════════════════════
+
+-- Wallpaper presets
+local WALLPAPERS = {
+  Aurora   = {Color3.fromRGB(18,22,58),  Color3.fromRGB(8,8,18),   Color3.fromRGB(42,8,60),  165},
+  Midnight = {Color3.fromRGB(0,0,0),     Color3.fromRGB(10,10,10), Color3.fromRGB(0,0,0),    180},
+  Ocean    = {Color3.fromRGB(4,30,80),   Color3.fromRGB(2,12,40),  Color3.fromRGB(0,40,80),  160},
+  Sunset   = {Color3.fromRGB(80,10,10),  Color3.fromRGB(20,8,8),   Color3.fromRGB(60,20,0),  150},
+  Forest   = {Color3.fromRGB(8,40,16),   Color3.fromRGB(4,18,8),   Color3.fromRGB(0,30,20),  170},
+  Candy    = {Color3.fromRGB(80,10,60),  Color3.fromRGB(30,4,50),  Color3.fromRGB(60,0,80),  145},
+}
+
+function Phone:SetWallpaper(name)
+  local wp = WALLPAPERS[name]
+  if not wp then return end
+  self._settings.wallpaper = name
+  local grad = self.Wallpaper:FindFirstChildOfClass("UIGradient")
+  if grad then
+    grad.Color = ColorSequence.new({
+      ColorSequenceKeypoint.new(0,   wp[1]),
+      ColorSequenceKeypoint.new(0.45,wp[2]),
+      ColorSequenceKeypoint.new(1,   wp[3]),
+    })
+    grad.Rotation = wp[4]
+  end
+end
+
+-- Accent colour presets
+local ACCENTS = {
+  Blue   = Color3.fromRGB(10,132,255),
+  Green  = Color3.fromRGB(52,211,91),
+  Purple = Color3.fromRGB(191,90,242),
+  Red    = Color3.fromRGB(255,69,58),
+  Orange = Color3.fromRGB(255,159,10),
+  Pink   = Color3.fromRGB(255,55,95),
+  Teal   = Color3.fromRGB(90,200,250),
+  Yellow = Color3.fromRGB(255,214,10),
+}
+
+function Phone:SetAccent(name)
+  local col = ACCENTS[name]
+  if not col then return end
+  self._settings.accentName  = name
+  self._settings.accentColor = col
+  self.accent = col
+  -- Update DI glow (just the camera dot tint)
+  if self.DI then
+    -- small visual hint — border tint
+    local stroke = self.DI:FindFirstChildOfClass("UIStroke")
+    if stroke then stroke.Color = col end
+  end
+end
+
+function Phone:GetAccentNames()
+  local t = {}
+  for k in pairs(ACCENTS) do table.insert(t,k) end
+  table.sort(t)
+  return t
+end
+
+function Phone:GetWallpaperNames()
+  local t = {}
+  for k in pairs(WALLPAPERS) do table.insert(t,k) end
+  table.sort(t)
+  return t
+end
+
 
 return Phone
